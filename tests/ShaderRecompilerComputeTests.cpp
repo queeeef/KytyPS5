@@ -15806,6 +15806,10 @@ public:
   void CheckRasterization(
       bool depth_feedback,
       Prospero::BufferFormat color_format = Prospero::BufferFormat::k32_32_32_32Float) {
+    if (!RasterizationSupported()) {
+      SkipRasterizationCases(1);
+      return;
+    }
     const char *name = depth_feedback ? "DepthAttachmentFeedback" : "PolygonModeRasterization";
     uint32_t packed_color = 0;
     std::array<float, 4> packed_expected{};
