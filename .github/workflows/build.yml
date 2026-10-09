@@ -323,6 +323,7 @@ jobs:
             libxss-dev \
             libxtst-dev \
             lld \
+            mesa-vulkan-drivers \
             pkg-config \
             wayland-protocols
 
@@ -389,6 +390,7 @@ jobs:
               audio_out2_port_tests pad_haptics_tests controller_settings_tests ime_dialog_tests lru_cache_tests virtual_memory_allocation_tests \
               resource_tracking_tests scalar_provenance_tests \
               resource_materialization_tests shader_vertex_metadata_tests archive_file_tests avplayer_file_tests \
+              shader_recompiler_compute_tests \
             --parallel
 
       - name: Test
@@ -396,6 +398,21 @@ jobs:
         run: |
           ctest --test-dir _Build/linux --output-on-failure \
             -R '^(audio_out2_port|pad_haptics|controller_settings|ime_dialog|lru_cache|memory_tracker|page_manager|resource_tracking|scalar_provenance|resource_materialization|shader_vertex_metadata|archive_file|avplayer_file|virtual_memory_allocation)$'
+
+      # The runner has no GPU, so these run on Mesa's lavapipe software Vulkan driver.
+      # Excluded because lavapipe cannot run them: shader_recompiler_compute (8-lane
+      # subgroups, guest waves need 32 or 64), kernel_file_system (the emulator's device
+      # selection requires minLod, barycentrics and depthBounds), texture_cache_image_overlap,
+      # texture_cache_htile_clear and buffer_cache_ranges (2x MSAA), and the
+      # rasterization-only graphics_pipeline_rasterization, buffer_cache_dirty_gc and
+      # color_render_target_1d, which would skip every case.
+      - name: Test GPU (lavapipe)
+        shell: bash
+        env:
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.json
+        run: |
+          ctest --test-dir _Build/linux --output-on-failure --timeout 600 \
+            -R '^(shader_recompiler_alignbyte|command_scheduler_timeline|stream_buffer_ring|gpu_command_lane|pm4_context_state|gpu_tiler|texture_cache_layered_image|host_image_allocation|texture_cache_image_views|texture_cache_storage_sampled|compute_meta_clear_classification)$'
 
       - name: Install
         shell: bash

@@ -298,6 +298,15 @@ ctest --test-dir _Build/windows --output-on-failure
 
 Use `_Build/linux` instead of `_Build/windows` for a Linux build.
 
+Without a GPU, a subset of the Vulkan tests runs on Mesa's lavapipe software driver; the Linux
+CI job lists which ones in its **Test GPU (lavapipe)** step:
+
+```bash
+sudo apt-get install mesa-vulkan-drivers
+VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.json \
+  ctest --test-dir _Build/linux --output-on-failure -R '^gpu_tiler$'
+```
+
 ### Visual Studio Code
 
 A ready-made Visual Studio Code setup is included in [`.vscode`](.vscode). It configures CMake
