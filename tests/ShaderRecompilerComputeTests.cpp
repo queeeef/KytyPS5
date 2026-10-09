@@ -1981,7 +1981,19 @@ public:
   [[nodiscard]] bool RasterizationSupported() const {
     return m_rasterization_supported;
   }
+  // Image view minimum LOD is optional for the same reason; cases that create
+  // views with a nonzero minimum LOD skip themselves when it is missing.
+  [[nodiscard]] bool MinLodSupported() const { return m_min_lod_supported; }
   void SkipRasterizationCases(u32 count) { m_skipped_cases += count; }
+  // Checks that the full run gates on RasterizationSupported() call this first so
+  // the single-check entry points skip them the same way.
+  [[nodiscard]] bool SkipWithoutRasterization() {
+    if (m_rasterization_supported) {
+      return false;
+    }
+    ++m_skipped_cases;
+    return true;
+  }
   [[nodiscard]] u32 SkippedCaseCount() const { return m_skipped_cases; }
   [[nodiscard]] GraphicContext &RuntimeContext() {
     EnsureRuntimeContext();
@@ -2124,6 +2136,9 @@ public:
   }
 
   void CheckGraphicsPushConstantBank() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "GraphicsPushConstantStages";
     EnsureRuntimeContext();
     RenderContext context(m_runtime_context);
@@ -3978,6 +3993,9 @@ public:
   }
 
   void CheckBufferCacheDirtyGarbageCollection() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "BufferCacheDirtyGarbageCollection";
     constexpr uintptr_t base = 0x0000000200700000ull;
     constexpr uint64_t allocation_size = 0x5000000;
@@ -9090,6 +9108,9 @@ public:
   }
 
   void CheckBgra16Readback() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "Bgra16Readback";
     constexpr uintptr_t base = 0x0000000204000000ull;
     constexpr uint64_t allocation_size = 0x200000;
@@ -9233,6 +9254,9 @@ public:
   }
 
   void CheckRenderExecutorColorDiscovery() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "RenderExecutorColorDiscovery";
     constexpr uintptr_t base = 0x0000000203c00000ull;
     constexpr uint32_t width = 512;
@@ -9474,6 +9498,9 @@ public:
   }
 
   void CheckRenderExecutorColor1DArrayDiscovery() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "RenderExecutorColor1DArrayDiscovery";
     constexpr uintptr_t base = 0x0000000203a00000ull;
     constexpr uint32_t width = 512;
@@ -9589,6 +9616,9 @@ public:
   }
 
   void CheckRenderExecutorColorVolumeDiscovery() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "RenderExecutorColorVolumeDiscovery";
     constexpr uintptr_t base = 0x0000000203e00000ull;
     constexpr uint64_t slice_size = 0x10000;
@@ -10493,6 +10523,9 @@ public:
   }
 
   void CheckRenderExecutorColorMetadataClear() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "RenderExecutorColorMetadataClear";
     struct PackedCase {
       vk::Format format;
@@ -10960,6 +10993,9 @@ public:
   }
 
   void CheckSampledDccClear() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "SampledDccClear";
     constexpr uintptr_t base = 0x0000000205000000ull;
     constexpr uint64_t color_size = 0x3fc0000;
@@ -11716,6 +11752,9 @@ public:
   }
 
   void CheckRenderExecutorColorStandardTileDiscovery() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "RenderExecutorColorStandardTile";
     constexpr uintptr_t base = 0x0000000203b00000ull;
     constexpr uint64_t allocation_size = 0x190000;
@@ -11835,6 +11874,9 @@ public:
   }
 
   void CheckRenderExecutorColorDepthTileDiscovery() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "RenderExecutorColorDepthTile";
     constexpr uintptr_t base = 0x0000000203d00000ull;
     constexpr uint64_t allocation_size = 0x10000;
@@ -11966,6 +12008,9 @@ public:
   }
 
   void CheckRenderExecutorStencilBindingDiscovery() {
+    if (SkipWithoutRasterization()) {
+      return;
+    }
     constexpr const char *name = "RenderExecutorStencilBindingDiscovery";
     constexpr uintptr_t base = 0x0000000203600000ull;
     constexpr uint64_t allocation_size = 0x1000000;
@@ -12726,7 +12771,9 @@ public:
               "reused image scratch did not rebuild dynamic storage mip views");
       // Streaming T# clamps apply after S# max LOD, without changing the view
       // base.
-      {
+      if (!MinLodSupported()) {
+        ++m_skipped_cases;
+      } else {
         constexpr uint64_t lod_address = base + 0x170000;
         auto lod_descriptor = mipped_storage_descriptor;
         lod_descriptor.dwords[0] = static_cast<uint32_t>(lod_address >> 8u);
@@ -15806,8 +15853,7 @@ public:
   void CheckRasterization(
       bool depth_feedback,
       Prospero::BufferFormat color_format = Prospero::BufferFormat::k32_32_32_32Float) {
-    if (!RasterizationSupported()) {
-      SkipRasterizationCases(1);
+    if (SkipWithoutRasterization()) {
       return;
     }
     const char *name = depth_feedback ? "DepthAttachmentFeedback" : "PolygonModeRasterization";
@@ -18208,6 +18254,7 @@ public:
 
 private:
   bool m_rasterization_supported = true;
+  bool m_min_lod_supported       = true;
   u32   m_skipped_cases          = 0;
 
   RenderContext &Renderer() {
@@ -18327,15 +18374,11 @@ private:
           features11.pNext = &workgroup_layout;
           vk::PhysicalDeviceShaderImageAtomicInt64FeaturesEXT image_atomic64{};
           workgroup_layout.pNext = &image_atomic64;
-          vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR barycentric{};
-          barycentric.sType = vk::StructureType::ePhysicalDeviceFragmentShaderBarycentricFeaturesKHR;
-          barycentric.pNext = &features12;
           vk::PhysicalDeviceFeatures2 features{};
           features.sType = vk::StructureType::ePhysicalDeviceFeatures2;
-          features.pNext = &barycentric;
+          features.pNext = &features12;
           physical.getFeatures2(&features);
-          if (barycentric.fragmentShaderBarycentric != true ||
-              features.features.shaderInt64 != true ||
+          if (features.features.shaderInt64 != true ||
               features11.storageBuffer16BitAccess != true ||
               features12.storageBuffer8BitAccess != true ||
               features12.samplerMirrorClampToEdge != true ||
@@ -18358,7 +18401,7 @@ private:
       }
     }
     Require("VulkanHarness", "dispatch", m_physical_device != nullptr,
-            "no Vulkan graphics+compute device with fragment barycentrics and 64-bit LDS/image atomics");
+            "no Vulkan graphics+compute device with 64-bit LDS/image atomics");
     m_physical_device.getMemoryProperties(&m_memory_properties);
 
     vk::PhysicalDeviceFeatures available_features{};
@@ -18386,8 +18429,10 @@ private:
     available_feedback_dynamic.pNext = &available_feedback_layout;
     vk::PhysicalDeviceProvokingVertexFeaturesEXT available_provoking_vertex{};
     available_provoking_vertex.pNext = &available_feedback_dynamic;
+    vk::PhysicalDeviceFragmentShaderBarycentricFeaturesKHR available_barycentric{};
+    available_barycentric.pNext = &available_provoking_vertex;
     vk::PhysicalDeviceImageViewMinLodFeaturesEXT available_min_lod{};
-    available_min_lod.pNext = &available_provoking_vertex;
+    available_min_lod.pNext = &available_barycentric;
     vk::PhysicalDeviceFeatures2 available_features2{};
     available_features2.sType = vk::StructureType::ePhysicalDeviceFeatures2;
     available_features2.pNext = &available_min_lod;
@@ -18423,8 +18468,6 @@ private:
     Require("VulkanHarness", "dispatch",
             available_features12.shaderSampledImageArrayNonUniformIndexing == true,
             "nonuniform sampled image indexing is not supported");
-    Require("VulkanHarness", "dispatch", available_min_lod.minLod == true,
-            "image view minimum LOD is not supported");
     Require("VulkanHarness", "graphics", available_features12.shaderOutputLayer == true,
             "vertex layer output is not supported");
     m_rasterization_supported = available_features.fillModeNonSolid &&
@@ -18435,10 +18478,17 @@ private:
                                 available_color_write.colorWriteEnable &&
                                 available_feedback_layout.attachmentFeedbackLoopLayout &&
                                 available_feedback_dynamic.attachmentFeedbackLoopDynamicState &&
-                                available_provoking_vertex.provokingVertexLast;
+                                available_provoking_vertex.provokingVertexLast &&
+                                available_barycentric.fragmentShaderBarycentric;
     if (!m_rasterization_supported) {
       std::printf(
           "[host]    ProductionRasterization   unavailable, rasterization cases "
+          "will be skipped\n");
+    }
+    m_min_lod_supported = available_min_lod.minLod;
+    if (!m_min_lod_supported) {
+      std::printf(
+          "[host]    ImageViewMinLod           unavailable, minimum LOD cases "
           "will be skipped\n");
     }
 
@@ -18470,7 +18520,9 @@ private:
     vk::PhysicalDeviceVulkan13Features device_features13{};
     device_features13.sType =
         vk::StructureType::ePhysicalDeviceVulkan13Features;
-    device_features13.pNext = &barycentric;
+    device_features13.pNext = m_rasterization_supported
+                                  ? static_cast<void *>(&barycentric)
+                                  : static_cast<void *>(&device_features12);
     device_features13.dynamicRendering = true;
     device_features13.synchronization2 = true;
     vk::PhysicalDeviceComputeShaderDerivativesFeaturesKHR derivatives{};
@@ -18503,7 +18555,7 @@ private:
     min_lod.pNext = m_rasterization_supported
                         ? static_cast<void *>(&provoking_vertex)
                         : static_cast<void *>(&derivatives);
-    device_info.pNext = &min_lod;
+    device_info.pNext = m_min_lod_supported ? static_cast<void *>(&min_lod) : min_lod.pNext;
     vk::PhysicalDeviceFeatures device_features{};
     device_features.shaderStorageImageWriteWithoutFormat = true;
     device_features.shaderImageGatherExtended = true;
@@ -18517,11 +18569,13 @@ private:
     std::vector<const char *> device_extensions{
         VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME,
         VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME,
-        VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME,
         VK_KHR_WORKGROUP_MEMORY_EXPLICIT_LAYOUT_EXTENSION_NAME,
-        VK_EXT_SHADER_IMAGE_ATOMIC_INT64_EXTENSION_NAME,
-        VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME};
+        VK_EXT_SHADER_IMAGE_ATOMIC_INT64_EXTENSION_NAME};
+    if (m_min_lod_supported) {
+      device_extensions.push_back(VK_EXT_IMAGE_VIEW_MIN_LOD_EXTENSION_NAME);
+    }
     if (m_rasterization_supported) {
+      device_extensions.push_back(VK_KHR_FRAGMENT_SHADER_BARYCENTRIC_EXTENSION_NAME);
       device_extensions.push_back(VK_EXT_DEPTH_CLIP_ENABLE_EXTENSION_NAME);
       device_extensions.push_back(VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
       device_extensions.push_back(VK_EXT_COLOR_WRITE_ENABLE_EXTENSION_NAME);
